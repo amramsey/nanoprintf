@@ -1,6 +1,14 @@
 version: 2.1
 
 jobs:
+  pylint-buildpy:
+    docker:
+      - image: charlesnicholson/circleci-images:latest
+    steps:
+      - checkout
+      - run:
+          command: python3 -m pylint build.py
+
   build-gcc-debug:
     docker:
       - image: charlesnicholson/circleci-images:latest
@@ -10,7 +18,7 @@ jobs:
     steps:
       - checkout
       - run:
-          command: ./b Debug -v
+          command: ./b --cfg Debug -v
 
   build-gcc-release:
     docker:
@@ -21,7 +29,29 @@ jobs:
     steps:
       - checkout
       - run:
-          command: ./b Release -v
+          command: ./b --cfg Release -v
+
+  build-gcc-32-debug:
+    docker:
+      - image: charlesnicholson/circleci-images:latest
+    environment:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+    steps:
+      - checkout
+      - run:
+          command: ./b --build-32-bit --cfg Debug -v
+
+  build-gcc-32-release:
+    docker:
+      - image: charlesnicholson/circleci-images:latest
+    environment:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+    steps:
+      - checkout
+      - run:
+          command: ./b --build-32-bit --cfg Release -v
 
   build-clang-debug:
     docker:
@@ -32,7 +62,7 @@ jobs:
     steps:
       - checkout
       - run:
-          command: ./b Debug -v
+          command: ./b --cfg Debug -v
 
   build-clang-release:
     docker:
@@ -43,12 +73,15 @@ jobs:
     steps:
       - checkout
       - run:
-          command: ./b Release -v
+          command: ./b --cfg Release -v
 
 workflows:
   submit-gate:
     jobs:
+      - pylint-buildpy
       - build-gcc-debug
+      - build-gcc-32-debug
       - build-gcc-release
+      - build-gcc-32-release
       - build-clang-debug
       - build-clang-release

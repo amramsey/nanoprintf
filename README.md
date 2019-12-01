@@ -1,24 +1,26 @@
 # nanoprintf
 
-[![CircleCI](https://circleci.com/gh/charlesnicholson/nanoprintf.svg?style=shield)](https://circleci.com/gh/charlesnicholson/nanoprintf) [![](https://img.shields.io/badge/license-public_domain-brightgreen.svg)](https://github.com/charlesnicholson/nanoprintf/blob/master/LICENSE)
+[![CircleCI](https://circleci.com/gh/charlesnicholson/nanoprintf.svg?style=shield)](https://circleci.com/gh/charlesnicholson/nanoprintf) [![Build status](https://ci.appveyor.com/api/projects/status/3ao6yd73kayp17p7?svg=true)](https://ci.appveyor.com/project/charlesnicholson/nanoprintf) [![](https://img.shields.io/badge/pylint-10.0-brightgreen.svg)](https://www.pylint.org/) [![](https://img.shields.io/badge/license-public_domain-brightgreen.svg)](https://github.com/charlesnicholson/nanoprintf/blob/master/LICENSE)
 
-nanoprintf is an implementation of snprintf and vsnprintf for embedded systems that aims for C11 standard compliance.
+nanoprintf is an implementation of snprintf and vsnprintf for embedded systems that, when fully enabled, aims for C11 standard compliance.
 
-nanoprintf makes no memory allocations, uses less than 100 bytes of stack, and is smaller than 5KB of ARM Cortex-M object code when optimized with all the bells and whistles turned on (slightly larger on x64, where you don't want to use it anyway).
+nanoprintf makes no memory allocations and uses less than 100 bytes of stack. Compiling with all optional features disabled yields ~2.3KB of ARM Cortex-M object code, and compiling with all optional features enabled is closer to 5KB.
 
-nanoprintf is a [single header file](https://github.com/charlesnicholson/nanoprintf/blob/readme/nanoprintf.h) in the style of the [stb libraries](https://github.com/nothings/stb). The rest of the repository is tests and scaffolding and not required for use.
+nanoprintf is a [single header file](https://github.com/charlesnicholson/nanoprintf/blob/master/nanoprintf.h) in the style of the [stb libraries](https://github.com/nothings/stb). The rest of the repository is tests and scaffolding and not required for use.
 
-nanoprintf is written in C89 for maximal compiler compatibility. C99 or C++11 compilers are required (for `uint64_t` and other types) if floating point conversion or large modifiers are enabled. nanoprintf does include standard headers but only uses them for types and argument lists; no calls are made into stdlib / libc, with the exception of any internal double-to-float conversion ABI calls your compiler might emit.
+nanoprintf is written in a minimal dialect of C99 for maximal compiler compatibility, and compiles cleanly at the highest warning levels on clang, gcc, and msvc in both 32- and 64-bit modes. It's _really_ hard to write portable C89 code, btw, when you don't have any guarantee about what integral type to use to hold a converted pointer representation.
 
-nanoprintf is statically configurable so users can find a balance between size, compiler requirements, and feature set. Floating point conversion, "large" length modifiers, and size write-back are all configurable and are only compiled if explicitly requested, see [Configuration](https://github.com/charlesnicholson/nanoprintf/tree/readme#configuration) for details.
+nanoprintf does include C standard headers but only uses them for C99 types and argument lists; no calls are made into stdlib / libc, with the exception of any internal double-to-float conversion ABI calls your compiler might emit. As usual, some Windows-specific headers are required if you're compiling natively for msvc.
+
+nanoprintf is statically configurable so users can find a balance between size, compiler requirements, and feature set. Floating point conversion, "large" length modifiers, and size write-back are all configurable and are only compiled if explicitly requested, see [Configuration](https://github.com/charlesnicholson/nanoprintf#configuration) for details.
 
 ## Motivation
 
 [tinyprintf](https://github.com/cjlano/tinyprintf) doesn't print floating point values.
 
-[printf](https://github.com/mpaland/printf) defines the actual standard library `printf` symbol, which isn't always what you want. It stores the final converted string (with padding and precision) in a temporary buffer, which makes supporting longer strings more costly. It also doesn't support the `%n` "write-back" specifier.
+"[printf](https://github.com/mpaland/printf)" defines the actual standard library `printf` symbol, which isn't always what you want. It stores the final converted string (with padding and precision) in a temporary buffer, which makes supporting longer strings more costly. It also doesn't support the `%n` "write-back" specifier.
 
-No other embedded-friendly printf projects that I could fine are in the public domain *and* have single-file implementations. Really though, I've just wanted to try my hand at a really small printf system for a while now.
+Also, no embedded-friendly printf projects that I could find are both in the public domain *and* have single-file implementations.
 
 ## Usage
 
@@ -30,7 +32,7 @@ No other embedded-friendly printf projects that I could fine are in the public d
 	#include "path/to/nanoprintf.h"
 	```
 
-1. `#include "path/to/nanoprintf.h"` as usual to expose the function prototypes.
+1. To call, just `#include "path/to/nanoprintf.h"` as usual and call the functions.
 1. Compile your code with your nanoprintf configuration flags. Alternately, wrap `nanoprintf.h` in your own header that defines all of your configuration flags, and use that everywhere in steps 2-3.
 
 ## API
@@ -49,8 +51,12 @@ nanoprintf does *not* provide `printf` or `putchar` itself; those are seen as sy
 
 ## Configuration
 
-nanoprintf has the following static configuration flags. You can either inject them into your compiler (usually `-D` flags) or wrap `nanoprintf.h` in [your own header](https://github.com/charlesnicholson/nanoprintf/blob/readme/unit_tests/nanoprintf_in_unit_tests.h) that sets them up, and then `#include` your header instead of `nanoprintf.h` in your application.
+nanoprintf has the following static configuration flags. You can either inject them into your compiler (usually `-D` flags) or wrap `nanoprintf.h` in [your own header](https://github.com/charlesnicholson/nanoprintf/blob/master/unit_tests/nanoprintf_in_unit_tests.h) that sets them up, and then `#include` your header instead of `nanoprintf.h` in your application.
 
+If no configuration flags are specified, nanoprintf will default to "reasonable" embedded values in an attempt to be helpful: floats enabled, writeback and large formatters disabled. If any configuration flags are explicitly specified, nanoprintf requires that all flags are explicitly specified.
+
+* `NANOPRINTF_USE_FIELD_WIDTH_FORMAT_SPECIFIERS`: Set to `0` or `1`. Enables field width specifiers.
+* `NANOPRINTF_USE_PRECISION_FORMAT_SPECIFIERS`: Set to `0` or `1`. Enables precision specifiers.
 * `NANOPRINTF_USE_FLOAT_FORMAT_SPECIFIERS`: Set to `0` or `1`. Enables floating-point specifiers.
 * `NANOPRINTF_USE_LARGE_FORMAT_SPECIFIERS`: Set to `0` or `1`. Enables oversized modifiers.
 * `NANOPRINTF_USE_WRITEBACK_FORMAT_SPECIFIERS`: Set to `0` or `1`. Enables `%n` for write-back.
@@ -72,10 +78,10 @@ Like `printf`, `nanoprintf` expects a conversion specification string of the fol
 	* `+`: Signed conversions always begin with `+` or `-` characters.
 	* ` `: (space) A space character is inserted if the first converted character is not a sign.
 	* `#`: Writes extra characters (`0x` for hex, `.` for empty floats, '0' for empty octals, etc).
-* **Field width**
+* **Field width** (if enabled)
 
 	A number that specifies the total field width for the conversion, adds padding. If field width is `*`, the field width is read from the next vararg.
-* **Precision**
+* **Precision** (if enabled)
 
 	Prefixed with a `.`, a number that specifies the precision of the number or string. If precision is `*`, the precision is read from the next vararg.
 * **Length modifier**
@@ -120,13 +126,21 @@ This will build all of the unit, conformance, and compilation tests for your hos
 
 The nanoprintf development environment uses [cmake](https://cmake.org/) and [ninja](https://ninja-build.org/). If you have these in your path, `./b` will use them. If not, `./b` will download and deploy them into `path/to/your/nanoprintf/external`.
 
-nanoprintf uses [CircleCI](https://circleci.com/) for continuous integration builds. The CircleCI builds use [this](https://hub.docker.com/r/charlesnicholson/circleci-images) Docker image on [Docker Hub](https://hub.docker.com/). The Dockerfile for the CircleCI builds lives [here](https://github.com/charlesnicholson/circleci-images).
+nanoprintf uses [CircleCI](https://circleci.com/) for Linux clang / gcc continuous integration builds. The CircleCI builds use [this](https://hub.docker.com/r/charlesnicholson/circleci-images) Docker image on [Docker Hub](https://hub.docker.com/). The Dockerfile for the CircleCI builds lives [here](https://github.com/charlesnicholson/circleci-images). The CircleCI build matrix builds [Debug, Release] x [32-bit, 64-bit] x [gcc, clang], minus the 32-bit clang configurations.
+
+For Windows builds, nanoprintf uses [AppVeyor](https://ci.appveyor.com/project/charlesnicholson/nanoprintf). A build matrix of [Debug, Release] x [32-bit, 64-bit] is compiled against Visual Studio 2017.
 
 ## Limitations
 
 No wide-character support exists: the `%lc` and `%ls` fields require that the arg be converted to a char array as if by a call to [wcrtomb](http://man7.org/linux/man-pages/man3/wcrtomb.3.html). When locale and character set conversions get involved, it's hard to keep the name "nano". Accordingly, `%lc` and `%ls` behave like `%c` and `%s`, respectively.
 
-Currently the only supported float conversions are the decimal forms: `%f` and `%F`. All other float conversions (exponent form, hexadecimal exponent form, dynamic precision form) behave like `%f` and `%F`. Pull requests welcome!
+Currently the only supported float conversions are the decimal forms: `%f` and `%F`. Pull requests welcome!
+
+## Philosophy
+
+This code is optimized for size, not readability or structure. Unfortunately modularity and "cleanliness" even in C adds overhead at this small scale, so most of the functionality and logic is pushed together into `npf_vpprintf`. This is not what normal embedded systems code should look like; it's `#ifdef` soup and hard to make sense of, and I apologize if you have to spelunk around in the implementation. Hopefully the various tests will serve as guide rails if you hack around in it.
+
+Alternately, perhaps you're a significantly better programmer than I! In that case, please help me make this code smaller and cleaner without making the footprint larger, or nudge me in the right direction. :)
 
 ## Acknowledgments
 
