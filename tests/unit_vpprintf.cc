@@ -1,41 +1,48 @@
 #include "unit_nanoprintf.h"
-#include "doctest.h"
 
 #include <climits>
 #include <cstring>
-#include <iostream>
 #include <string>
 #include <vector>
 
+#if NANOPRINTF_HAVE_GCC_WARNING_PRAGMAS
+  #pragma GCC diagnostic push
+  #if NANOPRINTF_CLANG
+    #pragma GCC diagnostic ignored "-Wformat-pedantic"
+    #pragma GCC diagnostic ignored "-Wold-style-cast"
+  #endif
+  #pragma GCC diagnostic ignored "-Wformat"
+  #pragma GCC diagnostic ignored "-Wformat-zero-length"
+  #pragma GCC diagnostic ignored "-Wformat-security"
+#endif
+
 struct Recorder {
   static void PutC(int c, void *ctx) {
-    static_cast< Recorder * >(ctx)->calls.push_back(c);
+    static_cast<Recorder*>(ctx)->calls.push_back((char)c);
   }
 
   std::string String() const {
-    return calls.empty() ? std::string() : std::string(calls.begin(), calls.end() - 1);
+    return calls.empty() ? std::string() : std::string(calls.begin(), calls.end());
   }
 
-  std::vector<int> calls;
+  std::vector<char> calls;
 };
 
 TEST_CASE("npf_vpprintf") {
   Recorder r;
 
-  SUBCASE("empty string only holds null terminator") {
+  SUBCASE("empty string never calls callback") {
     REQUIRE(npf_pprintf(r.PutC, &r, "") == 0);
-    REQUIRE(r.calls.size() == 1);
-    REQUIRE(r.calls[0] == '\0');
+    REQUIRE(r.calls.empty());
   }
 
-  SUBCASE("single character then null terminator") {
+  SUBCASE("single character string") {
     REQUIRE(npf_pprintf(r.PutC, &r, "A") == 1);
-    REQUIRE(r.calls.size() == 2);
+    REQUIRE(r.calls.size() == 1);
     REQUIRE(r.calls[0] == 'A');
-    REQUIRE(r.calls[1] == '\0');
   }
 
-  SUBCASE("string without format specifiers then null terminator") {
+  SUBCASE("string without format specifiers") {
     std::string const s{"Hello from nanoprintf!"};
     REQUIRE(npf_pprintf(r.PutC, &r, s.c_str()) == (int)s.size());
     REQUIRE(s == r.String());

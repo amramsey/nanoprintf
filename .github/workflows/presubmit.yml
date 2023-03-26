@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   schedule:
     - cron: '0 2 * * 0'  # Weekly
+  workflow_dispatch:
 
 permissions:
   packages: read
@@ -20,9 +21,49 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Pylint build.py
-        run: python3 -m pylint build.py
+        run: . /work/venv/bin/activate && python -m pylint build.py tests/size_report.py
+
+  download:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/charlesnicholson/docker-image:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Build
+        run: ./b --download --paland -v
+
+  sanitizers:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/charlesnicholson/docker-image:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    strategy:
+      matrix:
+        sanitizer: [ubsan, asan]
+        architecture: [32, 64]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Build
+        env:
+          CC: /usr/bin/clang
+          CXX: /usr/bin/clang++
+        run: ./b --arch ${{ matrix.architecture }} --${{ matrix.sanitizer }} --paland -v
 
   linux-gcc:
     runs-on: ubuntu-latest
@@ -36,17 +77,17 @@ jobs:
     strategy:
       matrix:
         configuration: [Debug, Release]
-        architecture: ['', --build-32-bit]
+        architecture: [32, 64]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Build
         env:
           CC: /usr/bin/gcc
           CXX: /usr/bin/g++
-        run: ./b --cfg ${{ matrix.configuration }} ${{ matrix.architecture }} --paland -v
+        run: ./b --cfg ${{ matrix.configuration }} --arch ${{ matrix.architecture }} --paland -v
 
   linux-clang:
     runs-on: ubuntu-latest
@@ -60,16 +101,17 @@ jobs:
     strategy:
       matrix:
         configuration: [Debug, Release]
+        architecture: [32, 64]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Build
         env:
           CC: /usr/bin/clang
           CXX: /usr/bin/clang++
-        run: ./b --cfg ${{ matrix.configuration }} --paland -v
+        run: ./b --cfg ${{ matrix.configuration }} --arch ${{ matrix.architecture }} --paland -v
 
   macos:
     runs-on: macos-latest
@@ -79,11 +121,11 @@ jobs:
         configuration: [Debug, Release]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Set up Python 3.x
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
       - name: Build
@@ -94,19 +136,49 @@ jobs:
 
     strategy:
       matrix:
-        architecture: [32, 64]
         configuration: [Debug, Release]
+        architecture: [32, 64]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Set up Python 3.x
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
       - name: Build
         shell: cmd
         run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars${{ matrix.architecture }}.bat"
-          python.exe build.py --cfg ${{ matrix.configuration }} --paland -v
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars${{ matrix.architecture }}.bat"
+          python.exe build.py --cfg ${{ matrix.configuration }} --paland -v --arch ${{ matrix.architecture }}
+
+  size-reports:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/charlesnicholson/docker-image:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cortex-M0
+        shell: bash
+        run: |
+          . /work/venv/bin/activate
+          python3 tests/size_report.py -p cm0
+
+      - name: Cortex-M4
+        shell: bash
+        run: |
+          . /work/venv/bin/activate
+          python3 tests/size_report.py -p cm4
+
+      - name: Linux x64
+        shell: bash
+        run: |
+          . /work/venv/bin/activate
+          python3 tests/size_report.py -p host
