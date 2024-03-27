@@ -70,6 +70,12 @@ Pass `NULL` or `nullptr` to `npf_[v]snprintf` to write nothing, and only return 
 
 nanoprintf does *not* provide `printf` or `putchar` itself; those are seen as system-level services and nanoprintf is a utility library. nanoprintf is hopefully a good building block for rolling your own `printf`, though.
 
+### Return Values
+
+The nanoprintf functions all return the same value: the number of characters that were either sent to the callback (for npf_pprintf) or the number of characters that would have been written to the buffer provided sufficient space. The null-terminator 0 byte is not part of the count.
+
+The C Standard allows for the printf functions to return negative values in case string or character encodings can not be performed, or if the output stream encounters EOF. Since nanoprintf is oblivious to OS resources like files, and does not support the `l` length modifier for `wchar_t` support, any runtime errors are either internal bugs (please report!) or incorrect usage. Because of this, nanoprintf only returns non-negative values representing how many bytes the formatted string contains (again, minus the null-terminator byte).
+
 ## Configuration
 
 ### Features
@@ -88,14 +94,11 @@ If no configuration flags are specified, nanoprintf will default to "reasonable"
 If a disabled format specifier feature is used, no conversion will occur and the format specifier string simply will be printed instead.
 
 ### Sprintf Safety
-By default, npf_snprintf and npf_vsnprintf behave according to the C Standard: the provided buffer will be filled but not overrun, though a null-terminator `0` byte will *not* be written at the end if the buffer is exhausted!
+By default, npf_snprintf and npf_vsnprintf behave according to the C Standard: the provided buffer will be filled but not overrun. If the string would have overrun the buffer, a null-terminator byte will be written to the final byte of the buffer. If the buffer is `null` or zero-sized, no bytes will be written.
 
-nanoprintf offers three options for configuring safety:
-* Do nothing. User-provided buffers will not be null-terminated if exhausted.
-* Define `NANOPRINTF_SNPRINTF_SAFE_TRIM_STRING_ON_OVERFLOW`: When exhausted, the final byte of the buffer will be overwritten with a null-terimator byte. This is similar in spirit to the behavior of [BSD strlcpy](https://linux.die.net/man/3/strlcpy).
-* Define `NANOPRINTF_SNPRINTF_SAFE_EMPTY_STRING_ON_OVERFLOW`: When exhausted, the _first_ byte of the buffer will be overwritten with a null-terminator byte. This is similar in spirit to [Microsoft's snprintf_s](https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/snprintf-s-snprintf-s-l-snwprintf-s-snwprintf-s-l).
+If you define `NANOPRINTF_SNPRINTF_SAFE_EMPTY_STRING_ON_OVERFLOW` and your string is larger than your buffer, the _first_ byte of the buffer will be overwritten with a null-terminator byte. This is similar in spirit to [Microsoft's snprintf_s](https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/snprintf-s-snprintf-s-l-snwprintf-s-snwprintf-s-l).
 
-In any of the above cases, nanoprintf will still return the number of bytes that would have been written to the buffer, had there been enough room. This value does not account for the null-terminator byte, in accordance with the C Standard.
+In all cases, nanoprintf will return the number of bytes that would have been written to the buffer, had there been enough room. This value does not account for the null-terminator byte, in accordance with the C Standard.
 
 ### Thread Safety
 nanoprintf uses only stack memory and no concurrency primitives, so internally it is oblivious to its execution environment. This makes it safe to call from multiple execution contexts concurrently, or to interrupt a `npf_` call with another `npf_` call (say, an ISR or something). If you use `npf_pprintf` concurrently with the same `npf_putc` target, it's up to you to ensure correctness inside your callback. If you `npf_snprintf` from multiple threads to the same buffer, you will have an obvious data race.
@@ -151,7 +154,7 @@ Like `printf`, `nanoprintf` expects a conversion specification string of the fol
 
 ## Floating Point
 
-Floating point conversion is performed by extracting the value into 64:64 fixed-point with an extra field that specifies the number of leading zero fractional digits before the first nonzero digit. No rounding is currently performed; values are simply truncated at the specified precision. This is done for simplicity, speed, and code footprint.
+Floating point conversion is performed by extracting the value into 64:64 fixed-point with an extra field that specifies the number of leading zero fractional digits before the first nonzero digit. This is done for simplicity, speed, and code footprint.
 
 Because the float -> fixed code operates on the raw float value bits, no floating point operations are performed. This allows nanoprintf to efficiently format floats on soft-float architectures like Cortex-M0, and to function identically with or without optimizations like "fast math". Despite `nano` in the name, there's no way to do away with double entirely, since the C language standard says that floats are promoted to double any time they're passed into variadic argument lists. nanoprintf casts all doubles back down to floats before doing any conversions. No other single- or double- precision operations are performed.
 
